@@ -3,7 +3,8 @@
 - Spring Boot 應用服務
 - MariaDB 資料庫
 ## 啟動方式：bash
-docker compose up --build 
+1. 先執行jar檔打包 -> mvn clean install -DskipTests
+2. 執行 -> docker compose up --build 
 ## 啟動後網址瀏覽
 http://<server-ip>:8080
 
