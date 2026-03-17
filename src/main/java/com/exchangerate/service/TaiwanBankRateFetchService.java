@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.Set;
 
@@ -20,112 +21,114 @@ import java.util.Set;
 public class TaiwanBankRateFetchService {
 
     private static final Logger log = LoggerFactory.getLogger(TaiwanBankRateFetchService.class);
+
     private static final String RATE_URL = "https://rate.bot.com.tw/xrt?Lang=zh-TW";
     private static final String BASE_CURRENCY = "TWD";
-    private static final Set<String> TARGET_CURRENCIES = Set.of("USD", "JPY", "EUR");
 
-    private final ExchangeRateRepository exchangeRateRepository;
+    private final ExchangeRateRepository repository;
 
-    public TaiwanBankRateFetchService(ExchangeRateRepository exchangeRateRepository) {
-        this.exchangeRateRepository = exchangeRateRepository;
+    public TaiwanBankRateFetchService(ExchangeRateRepository repository) {
+        this.repository = repository;
     }
 
-    /**
-     * Fetches USD, JPY, EUR rates from Taiwan Bank and saves to database.
-     * Uses spot sell rate (即期匯率 本行賣出) as the rate (TWD per 1 unit of foreign currency).
-     */
     @Transactional
     public void fetchAndSaveRates() {
+
         try {
+
             Document doc = Jsoup.connect(RATE_URL)
-                    .userAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    .timeout(10_000)
+                    .userAgent("Mozilla/5.0")
+                    .timeout(10000)
                     .get();
 
-            Element table = doc.select("table[title=牌告匯率]").first();
-            if (table == null) {
-                log.warn("Exchange rate table not found on page");
-                return;
-            }
+            Elements rows = doc.select("table tbody tr");
 
-            Elements rows = table.select("tbody tr");
             for (Element row : rows) {
-                String currency = parseCurrencyFromRow(row);
-                if (currency == null || !TARGET_CURRENCIES.contains(currency)) {
+
+                Elements cells = row.select("td");
+
+                if (cells.size() < 5) {
                     continue;
                 }
 
-                Optional<BigDecimal> spotSell = parseSpotSellRate(row);
-                if (spotSell.isEmpty()) {
-                    log.warn("Could not parse spot sell rate for {}", currency);
+                String currency = parseCurrency(row);
+
+                if (currency == null || currency.length() > 3) {
                     continue;
                 }
 
-                ExchangeRate entity = new ExchangeRate();
-                entity.setBaseCurrency(BASE_CURRENCY);
-                entity.setTargetCurrency(currency);
-                entity.setRate(spotSell.get());
-                exchangeRateRepository.save(entity);
-                log.info("Saved rate {} / {} = {}", BASE_CURRENCY, currency, spotSell.get());
+                BigDecimal cashBuy = parseRate(cells.get(1).text());
+                BigDecimal cashSell = parseRate(cells.get(2).text());
+                BigDecimal spotBuy = parseRate(cells.get(3).text());
+                BigDecimal spotSell = parseRate(cells.get(4).text());
+
+
+                LocalDate rateDate = LocalDate.now();
+
+                Optional<ExchangeRate> existing =
+                        repository.findByTargetCurrencyAndRateDate(currency, rateDate);
+
+                ExchangeRate entity;
+
+                if (existing.isPresent()) {
+
+                    entity = existing.get();
+
+                    entity.setCashBuy(cashBuy);
+                    entity.setCashSell(cashSell);
+                    entity.setSpotBuy(spotBuy);
+                    entity.setSpotSell(spotSell);
+
+                } else {
+
+                    entity = new ExchangeRate();
+
+                    entity.setBaseCurrency(BASE_CURRENCY);
+                    entity.setTargetCurrency(currency);
+                    entity.setRateDate(LocalDate.now());
+
+                    entity.setCashBuy(cashBuy);
+                    entity.setCashSell(cashSell);
+                    entity.setSpotBuy(spotBuy);
+                    entity.setSpotSell(spotSell);
+                }
+
+                repository.save(entity);
+
+                log.info("Saved {}", currency);
             }
+
         } catch (Exception e) {
-            log.error("Failed to fetch or save exchange rates from Taiwan Bank", e);
-            throw new RuntimeException("Exchange rate fetch failed", e);
+
+            log.error("Fetch exchange rate failed", e);
+
         }
     }
 
-    private String parseCurrencyFromRow(Element row) {
-        // Link to history page contains currency code: e.g. /xrt/history/USD
+    private String parseCurrency(Element row) {
+
         Element link = row.selectFirst("a[href*=/xrt/history/]");
-        if (link != null) {
-            String href = link.attr("href");
-            int lastSlash = href.lastIndexOf('/');
-            if (lastSlash >= 0 && lastSlash < href.length() - 1) {
-                return href.substring(lastSlash + 1).split("\\?")[0].trim();
-            }
-        }
-        return null;
+
+        if (link == null) return null;
+
+        String href = link.attr("href");
+
+        String code = href.substring(href.lastIndexOf("/") + 1).trim();
+
+        return code.split("\\?")[0].trim();
     }
 
-    /**
-     * Spot sell is the 4th rate column: 現金買入, 現金賣出, 即期買入, 即期賣出 (index 3 in 0-based).
-     */
-    private Optional<BigDecimal> parseSpotSellRate(Element row) {
-        Elements cells = row.select("td");
-        int rateIndex = 0;
-        for (Element td : cells) {
-            String text = td.text().trim();
-            if (text.isEmpty() || text.equals("-")) {
-                continue;
-            }
-            if (isNumeric(text)) {
-                if (rateIndex == 3) {
-                    return parseRate(text);
-                }
-                rateIndex++;
-            }
-        }
-        return Optional.empty();
-    }
+    private BigDecimal parseRate(String text) {
 
-    private boolean isNumeric(String s) {
-        if (s == null || s.isEmpty()) {
-            return false;
+        if (text == null || text.equals("-") || text.isBlank()) {
+            return null;
         }
+
         try {
-            Double.parseDouble(s.replace(",", ""));
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
+            return new BigDecimal(text.replace(",", ""));
+        } catch (Exception e) {
+            return null;
         }
     }
 
-    private Optional<BigDecimal> parseRate(String s) {
-        try {
-            String cleaned = s.replace(",", "").trim();
-            return Optional.of(new BigDecimal(cleaned).setScale(6, RoundingMode.HALF_UP));
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
-    }
 }

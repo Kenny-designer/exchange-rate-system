@@ -17,7 +17,7 @@ public class ExchangeRateScheduler {
         this.taiwanBankRateFetchService = taiwanBankRateFetchService;
     }
 
-    @Scheduled(cron = "${app.scheduler.exchange-rate.cron:0 0 * * * *}") // default: every hour
+    @Scheduled(cron = "${app.scheduler.exchange-rate.cron}", zone = "Asia/Taipei")
     public void fetchExchangeRates() {
         log.info("Scheduled task: fetch exchange rates from Taiwan Bank");
         taiwanBankRateFetchService.fetchAndSaveRates();

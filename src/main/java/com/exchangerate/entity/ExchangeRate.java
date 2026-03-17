@@ -1,11 +1,24 @@
 package com.exchangerate.entity;
 
 import jakarta.persistence.*;
+import lombok.Data;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+@Data
 @Entity
-@Table(name = "exchange_rates")
+@Table(name = "exchange_rates",
+        indexes = {
+                @Index(name = "idx_currency_date", columnList = "targetCurrency, rateDate")
+        },
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames={"targetCurrency","rateDate"})
+        }
+)
 public class ExchangeRate {
 
     @Id
@@ -18,49 +31,25 @@ public class ExchangeRate {
     @Column(nullable = false, length = 3)
     private String targetCurrency;
 
-    @Column(nullable = false, precision = 19, scale = 6)
-    private BigDecimal rate;
+    @Column(precision = 10, scale = 6)
+    private BigDecimal cashBuy;
+
+    @Column(precision = 10, scale = 6)
+    private BigDecimal cashSell;
+
+    @Column(precision = 10, scale = 6)
+    private BigDecimal spotBuy;
+
+    @Column(precision = 10, scale = 6)
+    private BigDecimal spotSell;
 
     @Column(nullable = false)
-    private LocalDateTime createdAt = LocalDateTime.now();
+    private LocalDate rateDate;
 
-    public Long getId() {
-        return id;
-    }
+    @CreationTimestamp
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    public void setId(Long id) {
-        this.id = id;
-    }
-
-    public String getBaseCurrency() {
-        return baseCurrency;
-    }
-
-    public void setBaseCurrency(String baseCurrency) {
-        this.baseCurrency = baseCurrency;
-    }
-
-    public String getTargetCurrency() {
-        return targetCurrency;
-    }
-
-    public void setTargetCurrency(String targetCurrency) {
-        this.targetCurrency = targetCurrency;
-    }
-
-    public BigDecimal getRate() {
-        return rate;
-    }
-
-    public void setRate(BigDecimal rate) {
-        this.rate = rate;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
+    @UpdateTimestamp
+    private LocalDateTime updatedAt;
 }

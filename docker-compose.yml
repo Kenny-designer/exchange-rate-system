@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+
+  mariadb:
+    image: mariadb:11
+    container_name: exchange-rate-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: exchange_rate
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mariadb_data:/var/lib/mysql
+
+  app:
+    build: .
+    container_name: exchange-rate-app
+    depends_on:
+      - mariadb
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mariadb://mariadb:3306/exchange_rate
+      SPRING_DATASOURCE_USERNAME: app
+      SPRING_DATASOURCE_PASSWORD: app123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+
+volumes:
+  mariadb_data:
