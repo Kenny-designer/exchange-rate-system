@@ -11,6 +11,7 @@ services:
       MYSQL_DATABASE: exchange_rate
       MYSQL_USER: app
       MYSQL_PASSWORD: app123
+      TZ: Asia/Taipei
     ports:
       - "3306:3306"
     volumes:
@@ -28,6 +29,7 @@ services:
       SPRING_DATASOURCE_USERNAME: app
       SPRING_DATASOURCE_PASSWORD: app123
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      TZ: Asia/Taipei
 
 volumes:
   mariadb_data:
