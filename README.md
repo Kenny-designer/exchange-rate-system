@@ -34,7 +34,7 @@ curl http://localhost:8080/api/rates/USD
 ## 手動更新某幣別匯率
 POST /api/update
 ### 呼叫範例
-curl -X POST http://localhost:8080/api/rates/update \
+curl -X POST http://localhost:8080/api/update \
 -H "Content-Type: application/json" \
 -d '{
 "currency": "USD",
